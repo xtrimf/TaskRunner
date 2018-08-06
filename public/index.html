@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+
+
+.container {
+  padding: 16px;
+}
+
+.login {
+  position: fixed; /* Stay in place */
+  left: 0;
+  top: 0;
+  width: 100%; /* Full width */
+  height: 100%; /* Full height */
+}
+
+/* login Content/Box */
+.login-content {
+  /* background-color: #fefefe; */
+  margin: 80px auto 15% auto; /* 5% from the top, 15% from the bottom and centered */
+  /* border: 1px solid #888; */
+  width: 300px; /* Could be more or less, depending on screen size */
+}
+
+</style>
+</head>
+   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/siimple@3.1.0/dist/siimple.min.css">
+   <script type="text/javascript" src="https://unpkg.com/bcryptjs@2.4.3/dist/bcrypt.js"></script>
+   <script src="/socket.io/socket.io.js"></script>
+   <script>
+      var socket = io.connect('http://{server IP address}:3131');
+   </script>
+   <body class="siimple--bg-dark siimple--color-white">
+      <div class="siimple-navbar siimple-navbar--extra-large siimple-navbar--primary">
+         <div class="siimple-navbar-title">BI Task Runner</div>
+         <div class="siimple--float-right">
+         </div>
+      </div>
+      <br>
+      <div class="siimple-grid">
+         <div class="siimple-grid-row siimple--text-center">
+            <div class="siimple-grid-col siimple-grid-col--12">
+               <div id="table1" class="siimple-table hide">
+                  <div class="siimple-table-header">
+                     <div class="siimple-table-row">
+                        <div class="siimple-table-cell">Task</div>
+                        <div class="siimple-table-cell status-cell" >Status</div>
+                        <div class="siimple-table-cell">Action</div>
+                     </div>
+                  </div>
+                  <div id="tableBody" class="siimple-table-body siimple--bg-light">
+                  </div>
+               </div>
+            </div>
+         </div>
+      </div>
+
+      <div id="login" class="login hide">
+        <div class="login-content">
+            <div class="siimple-field-label siimple--color-white">Username</div>
+            <input id="user" type="text" class="siimple-input siimple-input--fluid" placeholder="Enter Username" required>
+            <br/>
+            <br/>
+            <div class="siimple-field-label siimple--color-white">Password</div>
+            <input  id="pwd" type="password" class="siimple-input siimple-input--fluid" placeholder="Enter Password" required>
+            <br>
+            <br>
+            <button class="siimple-btn siimple-btn--primary siimple-btn--fluid marginleft" onclick="login()">Login</button>
+        </div>
+      </div>
+
+      <script type="text/javascript">
+         var hrSpinner = false;
+         var token = localStorage.getItem("bit_user") || null ;
+         var tasks = JSON.parse(localStorage.getItem("bit_tasks")) || null ;
+
+          function login() {
+            u = document.getElementById("user").value.toLowerCase();
+            p = document.getElementById("pwd").value;
+
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+              if (this.readyState == 4 && this.status == 200) {
+                const taskList = JSON.parse(this.response)
+                if(taskList != 'error') {
+                  showTable(taskList);
+                  localStorage.setItem("bit_tasks",JSON.stringify(taskList))
+                  window.tasks = taskList ;
+                  localStorage.setItem("bit_user",u)
+                }
+              }
+            };
+            xhttp.open("POST", "auth", true)
+            xhttp.setRequestHeader("user", u)
+            xhttp.setRequestHeader("pwd",  p)
+            xhttp.send();
+          }
+
+         // need to login?
+         if(token == null) {
+           var element = document.getElementById('login');
+           element.classList.remove("hide");
+         } else {
+           // get task listen
+           var xhttp = new XMLHttpRequest();
+           xhttp.onreadystatechange = function() {
+             if (this.readyState == 4 && this.status == 200) {
+               const taskList = JSON.parse(this.response)
+               if(taskList != 'error') {
+                 showTable(taskList);
+                 localStorage.setItem("bit_tasks",JSON.stringify(taskList))
+               }
+             }
+           };
+           xhttp.open("GET", "auth/tasks", true);
+           xhttp.setRequestHeader("user", token);
+           xhttp.send();
+         }
+
+        function showTable(taskList){
+          document.getElementById('login').classList.add("hide");
+          document.getElementById('table1').classList.remove("hide");
+
+          for(var i=0; i<taskList.length; i++ ){
+            var table = document.getElementById('tableBody');
+            var newRow = document.createElement('div');
+            newRow.classList.add("siimple-table-row")
+            var a = "eldad";
+            newRow.innerHTML = `<div class="siimple-table-cell siimple--text-left">${taskList[i]}</div>
+                                <div class="siimple-table-cell siimple--color-primary" >
+                                   <div class="flex">
+                                      <label id="${taskList[i]}"></label>
+                                      <div class="siimple-spinner siimple-spinner--success hide" id="${taskList[i]}spinner"></div>
+                                   </div>
+                                </div>
+                                <div class="siimple-table-cell"><button class="siimple-btn siimple-btn--primary siimple-btn--fluid" id="${taskList[i]}button" type="button" onclick="run('${taskList[i]}')">Run</button></div>`;
+            table.appendChild(newRow);
+          }
+          socketON(); // activate socket
+        }
+        
+        // activate socket
+        function socketON(){
+          console.log('starting socket');
+         socket.on("StatusUpdate", function (data) {
+
+           if( tasks.indexOf(data.task)>=0) {
+             try{document.getElementById(data.task).innerHTML = data.status}catch(e){console.log(data.task+' error...');};
+             switch(data.status){
+               case 'Running':
+                 var element = document.getElementById(data.task.replace(' ','') +'button');
+                 try{element.classList.add("siimple-btn--disabled")}catch(e){};
+                 var element2 = document.getElementById(data.task);
+                 try{element2.classList.add("siimple--color-success")}catch(e){};
+                 var element3 = document.getElementById(data.task.replace(' ','') +'spinner');
+                 try{element3.classList.remove("hide")}catch(e){};
+                 break;
+               default:
+                 var element = document.getElementById(data.task.replace(' ','')+'button');
+                 try{element.classList.remove("siimple-btn--disabled")}catch(e){};
+                 var element2 = document.getElementById(data.task);
+                 try{element2.classList.remove("siimple--color-success")}catch(e){};
+                 var element3 = document.getElementById(data.task.replace(' ','') +'spinner');
+                 try{element3.classList.add("hide")}catch(e){};
+             }
+           }
+         });
+        }
+
+         function run(task){
+          var xhttp = new XMLHttpRequest();
+          try {
+            document.getElementById(task).innerHTML = 'Waiting for Queue...';
+            xhttp.open("GET", "task/?user="+token+"&task="+task, true);
+            xhttp.send();
+            } catch(e) {}
+         }
+      </script>
+      <style>
+         .siimple-table{
+           width: 526px;
+           min-width: 526px;
+         }
+         .siimple-grid-col{
+           display: flex;
+           justify-content: center;
+         }
+         .flex {
+           display: flex;
+           justify-content: center;
+           align-items:center;
+           flex-wrap: nowrap;
+         }
+         .status-cell{
+           width: 38% !important;
+         }
+
+         .marginleft {
+           margin-left: 24.5px;
+         }
+
+         .hide {
+             display: none;
+          }
+      </style>
+   </body>
+</html>
