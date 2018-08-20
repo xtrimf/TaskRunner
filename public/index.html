@@ -2,14 +2,15 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="1800">
 <style>
-
-
 .container {
   padding: 16px;
 }
 
+/* The Modal (background) */
 .login {
+  /* display: none; /* Hidden by default */
   position: fixed; /* Stay in place */
   left: 0;
   top: 0;
@@ -19,9 +20,7 @@
 
 /* login Content/Box */
 .login-content {
-  /* background-color: #fefefe; */
-  margin: 80px auto 15% auto; /* 5% from the top, 15% from the bottom and centered */
-  /* border: 1px solid #888; */
+  margin: 80px auto 15% auto;
   width: 300px; /* Could be more or less, depending on screen size */
 }
 
@@ -31,13 +30,12 @@
    <script type="text/javascript" src="https://unpkg.com/bcryptjs@2.4.3/dist/bcrypt.js"></script>
    <script src="/socket.io/socket.io.js"></script>
    <script>
-      var socket = io.connect('http://{server IP address}:3131');
+      var socket = io.connect('http://localhost:3131');
    </script>
    <body class="siimple--bg-dark siimple--color-white">
       <div class="siimple-navbar siimple-navbar--extra-large siimple-navbar--primary">
          <div class="siimple-navbar-title">BI Task Runner</div>
-         <div class="siimple--float-right">
-         </div>
+         <div class="siimple--float-right"></div>
       </div>
       <br>
       <div class="siimple-grid">
@@ -66,6 +64,7 @@
             <br/>
             <div class="siimple-field-label siimple--color-white">Password</div>
             <input  id="pwd" type="password" class="siimple-input siimple-input--fluid" placeholder="Enter Password" required>
+            <p id="authError" class="hide" style="color: red; font-size: 10px;">*username and/or password incorrect</p>
             <br>
             <br>
             <button class="siimple-btn siimple-btn--primary siimple-btn--fluid marginleft" onclick="login()">Login</button>
@@ -84,33 +83,47 @@
             var xhttp = new XMLHttpRequest();
             xhttp.onreadystatechange = function() {
               if (this.readyState == 4 && this.status == 200) {
-                const taskList = JSON.parse(this.response)
-                if(taskList != 'error') {
+                if(this.response != 'error') {
+                  const taskList = JSON.parse(this.response)[0]
                   showTable(taskList);
                   localStorage.setItem("bit_tasks",JSON.stringify(taskList))
                   window.tasks = taskList ;
+                  for(let i=0; i<taskList.length; ++i){
+                    let data={};
+                    data.task = taskList[i];  // get sask
+                    data.status = JSON.parse(this.response)[1][i] // get status
+                    manageCoponent(data)
+                  }
                   localStorage.setItem("bit_user",u)
+                } else {
+                  document.getElementById("authError").classList.remove("hide");
                 }
               }
             };
-            xhttp.open("POST", "auth", true)
+            xhttp.open("POST", "auth", true);
             xhttp.setRequestHeader("user", u)
             xhttp.setRequestHeader("pwd",  p)
             xhttp.send();
           }
 
-         // need to login?
+         // need to login
          if(token == null) {
            var element = document.getElementById('login');
            element.classList.remove("hide");
          } else {
-           // get task listen
+           // get task list
            var xhttp = new XMLHttpRequest();
            xhttp.onreadystatechange = function() {
              if (this.readyState == 4 && this.status == 200) {
-               const taskList = JSON.parse(this.response)
+               const taskList = JSON.parse(this.response)[0];
                if(taskList != 'error') {
                  showTable(taskList);
+                 for(let i=0; i<taskList.length; ++i){
+                   let data={};
+                   data.task = taskList[i];  // get sask
+                   data.status = JSON.parse(this.response)[1][i] // get status
+                   manageCoponent(data)
+                 }
                  localStorage.setItem("bit_tasks",JSON.stringify(taskList))
                }
              }
@@ -120,6 +133,8 @@
            xhttp.send();
          }
 
+
+        // show table and create elements according to permissions
         function showTable(taskList){
           document.getElementById('login').classList.add("hide");
           document.getElementById('table1').classList.remove("hide");
@@ -128,7 +143,6 @@
             var table = document.getElementById('tableBody');
             var newRow = document.createElement('div');
             newRow.classList.add("siimple-table-row")
-            var a = "eldad";
             newRow.innerHTML = `<div class="siimple-table-cell siimple--text-left">${taskList[i]}</div>
                                 <div class="siimple-table-cell siimple--color-primary" >
                                    <div class="flex">
@@ -141,42 +155,46 @@
           }
           socketON(); // activate socket
         }
-        
-        // activate socket
-        function socketON(){
-          console.log('starting socket');
-         socket.on("StatusUpdate", function (data) {
 
-           if( tasks.indexOf(data.task)>=0) {
-             try{document.getElementById(data.task).innerHTML = data.status}catch(e){console.log(data.task+' error...');};
-             switch(data.status){
-               case 'Running':
-                 var element = document.getElementById(data.task.replace(' ','') +'button');
-                 try{element.classList.add("siimple-btn--disabled")}catch(e){};
-                 var element2 = document.getElementById(data.task);
-                 try{element2.classList.add("siimple--color-success")}catch(e){};
-                 var element3 = document.getElementById(data.task.replace(' ','') +'spinner');
-                 try{element3.classList.remove("hide")}catch(e){};
-                 break;
-               default:
-                 var element = document.getElementById(data.task.replace(' ','')+'button');
-                 try{element.classList.remove("siimple-btn--disabled")}catch(e){};
-                 var element2 = document.getElementById(data.task);
-                 try{element2.classList.remove("siimple--color-success")}catch(e){};
-                 var element3 = document.getElementById(data.task.replace(' ','') +'spinner');
-                 try{element3.classList.add("hide")}catch(e){};
-             }
-           }
+        // socket activations
+        function socketON(){
+           socket.on("StatusUpdate", function (data) {
+            manageCoponent(data);
          });
         }
 
+        // manage the status column
+        function manageCoponent(data){
+          if( tasks.indexOf(data.task)>=0) {
+            try{document.getElementById(data.task).innerHTML = data.status}catch(e){console.log(data.task+' error...');};
+            switch(data.status){
+              case 'Running':
+                var element = document.getElementById(data.task.replace(' ','') +'button');
+                try{element.classList.add("siimple-btn--disabled")}catch(e){};
+                var element2 = document.getElementById(data.task);
+                try{element2.classList.add("siimple--color-success")}catch(e){};
+                var element3 = document.getElementById(data.task.replace(' ','') +'spinner');
+                try{element3.classList.remove("hide")}catch(e){};
+                break;
+              default:
+                var element = document.getElementById(data.task.replace(' ','')+'button');
+                try{element.classList.remove("siimple-btn--disabled")}catch(e){};
+                var element2 = document.getElementById(data.task);
+                try{element2.classList.remove("siimple--color-success")}catch(e){};
+                var element3 = document.getElementById(data.task.replace(' ','') +'spinner');
+                try{element3.classList.add("hide")}catch(e){};
+            }
+          }
+        }
+
          function run(task){
-          var xhttp = new XMLHttpRequest();
-          try {
-            document.getElementById(task).innerHTML = 'Waiting for Queue...';
-            xhttp.open("GET", "task/?user="+token+"&task="+task, true);
-            xhttp.send();
-            } catch(e) {}
+         var xhttp = new XMLHttpRequest();
+         try {
+         document.getElementById(task).innerHTML = 'Waiting for Queue...';
+         xhttp.open("GET", "task/?user="+token+"&task="+task, true);
+         xhttp.send();
+         } catch(e) {
+           }
          }
       </script>
       <style>
