@@ -1,8 +1,9 @@
 var ldap = require('ldapjs')
 var Promise = require('bluebird');
+var Conf = require ('./conf.js')
 
 const ldapOptions = {
-    url: 'ldap://{LDAP server address}:389',
+    url: Conf.LDAP_SERVER,
     connectedTimeoutt: 30000,
     reconnect: true
 };
@@ -11,8 +12,8 @@ module.exports = {
         authenticate: function(userId, password) {
                 return new Promise((resolve, reject) => {
                         const ldapClient = ldap.createClient(ldapOptions);
-                        // authenticate with known user to gain acces to LDAP directory
-                        ldapClient.bind('CN={admin},CN=Users,DC={company},DC={com}', '{password}', function(err, res) {
+                        // authenticate with know user to gain acces to LDAP directory
+                        ldapClient.bind(`${Conf.LDAP_USER_PATH}`, `${Conf.PWD}`, function(err, res) {
                             if (err) {
                                 resolve(false)
                             }
@@ -24,11 +25,12 @@ module.exports = {
                             };
 
                             // search the user in LDAP
-                            ldapClient.search('DC=sodaclub,DC=net', opts, function(err, res) {
+                            ldapClient.search(`${Conf.LDAP_SEARCH_PATH}`, opts, function(err, res) {
                                 if (err) {
                                     resolve(false)
                                 } else {
                                 res.on('searchEntry', function(entry) {
+                                    //console.log('entry: ' + JSON.stringify(entry.dn));
                                     try {
                                         // if user found, authenticate it.
                                         ldapClient.bind(entry.dn, password, function(err, res) {
@@ -37,21 +39,20 @@ module.exports = {
                                             resolve(false)}
                                           else{
                                             resolve(true)
-                                            console.log('User "' + userId + '" authenticated');
+                                            console.log(new Date() + ' - User "' + userId + '" authenticated');
                                           }
                                         });
                                     }catch(e){};
                                 });
                                 res.on('error', function(err) {
                                   resolve(false)
-                                  console.error('error: ' + err.message);
+                                  console.error(new Date() + ' - error: ' + err.message);
                                });
                                res.on('end', function(result) {
                                 //resolve(true)
-                              });
+                               });
                               }
                             });
-
                         });
                     });
               }
