@@ -18,7 +18,7 @@ module.exports = {
                                 resolve(false)
                             }
                             var opts = {
-                                filter: 'mailNickname=' + userId,
+                                filter: 'sAMAccountName=' + userId,
                                 scope: 'sub',
                                 timeLimit: 2,
                                 attributes: ['dn'] //, 'sn', 'cn'] // we only dn for authentication. dn is the route to exact loation in LDAP schema
